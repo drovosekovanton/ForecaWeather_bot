@@ -1,0 +1,12 @@
+[Unit]
+After=network.target
+Description=ForecaWeather Bot
+
+[Service]
+Type=simple
+WorkingDirectory=/root/
+ExecStart=/usr/bin/python3 /root/telegram/bots/forecaweather/bot.py
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
