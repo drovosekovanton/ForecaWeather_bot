@@ -1,7 +1,8 @@
 import telebot
 from bs4 import BeautifulSoup
 from requests import get, exceptions
-from token import TOKEN
+from custom_token import TOKEN
+
 
 # http://t.me/ForecaWeather_bot
 
@@ -61,7 +62,9 @@ def run():
         forecast = []
         for hour_row in day:
             time = hour_row.find(class_='value time time_24h').text
-            temperature = hour_row.find(class_='value temp temp_c warm').text
+            temperature = (
+                    hour_row.find(class_='value temp temp_c warm') or
+                    hour_row.find(class_='value temp temp_c cold')).text
             temperature_feel = hour_row.find(class_='value temp temp_c').text
             precipitation = list(hour_row.find(class_='value rain rain_mm').stripped_strings)[0]  # w/o units
             wind_name = hour_row.find(class_='wind').find('img').attrs['alt']
