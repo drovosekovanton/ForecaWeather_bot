@@ -4,9 +4,10 @@ Description=ForecaWeather Bot
 
 [Service]
 Type=simple
-WorkingDirectory=/root/
-ExecStart=/usr/bin/python3 /root/telegram/bots/forecaweather/bot.py
+WorkingDirectory=/opt/venv/telegrambot
+ExecStart=/opt/venv/telegrambot/bin/python3 /opt/forecaweather_bot/bot.py
 Restart=always
+RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
