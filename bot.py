@@ -1,6 +1,7 @@
 import telebot
 from bs4 import BeautifulSoup
 from requests import get, exceptions
+import logging
 from custom_token import TOKEN
 
 THIS_DAY_URL = 'https://www.foreca.com/ru/100561347/Glazov-Udmurtiya-Republic-Russia/hourly?day=0'
@@ -43,10 +44,11 @@ wind_dict = {  # double arrow emojis from unicode table
 
 def run():
     bot = telebot.TeleBot(TOKEN)
+    logging.basicConfig(level=logging.INFO)
 
     def log(message: telebot.types.Message):
         # log request string and username, just in case
-        print(f'Request \'{message.text}\' from \'{message.chat.username}\'')
+        logging.info(f'Request \'{message.text}\' from \'{message.chat.username}\'')
 
     def hour_fetcher(url: str) -> str:
         request_result = None
