@@ -22,4 +22,4 @@ Optionally you can use
 - systemctl stop forecaweather-bot
 
 ---
-The python script is hardcoded to russian but i think you can handle it.
+The python script is hardcoded to russian, but I think you can handle it.
