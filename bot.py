@@ -1,7 +1,9 @@
 import telebot
+import logging
+import re
+import json
 from bs4 import BeautifulSoup
 from requests import get, exceptions
-import logging
 from custom_token import TOKEN
 
 THIS_DAY_URL = 'https://www.foreca.com/ru/100561347/Glazov-Udmurtiya-Republic-Russia/hourly?day=0'
@@ -30,7 +32,7 @@ TEN_DAY_URL = 'https://www.foreca.com/ru/100561347/Glazov-Udmurtiya-Republic-Rus
 #     'NW': '\u2198',  # ↘
 # }
 
-wind_dict = {  # double arrow emojis from unicode table
+wind_dict = {  # double arrow emojis from Unicode table
     'N': '\u21d3',  # ↓
     'NE': '\u21d9',  # ↙
     'E': '\u21d0',  # ←
@@ -51,6 +53,7 @@ def run():
         logging.info(f'Request \'{message.text}\' from \'{message.chat.username}\'')
 
     def hour_fetcher(url: str) -> str:
+        # values extracted from data field of some js script
         request_result = None
         try:
             request_result = get(url)
@@ -62,22 +65,31 @@ def run():
 
         soup = BeautifulSoup(request_result.text, 'html.parser')
         forecast = []
-        for hour_row in soup.find_all(class_='hour'):
-            time = hour_row.find_next(class_='value time time_24h').get_text()
-            temperature = (hour_row.find_next(class_='value temp temp_c warm') or hour_row.find_next(
-                class_='value temp temp_c cold')).get_text()
-            temperature_feel = hour_row.find_next(class_='value temp temp_c').get_text()
-            precipitation = list(hour_row.find_next(class_='value rain rain_mm').stripped_strings)[0]  # w/o units
-            # get wind direction from 'alt' attribute of wind picture, it's an abbreviation like W, NE
-            # we use some beautifulsoup4 magic here to find 'alt' attribute from 'img' tag
-            # noinspection PyUnresolvedReferences
-            wind_name = hour_row.find_next(class_='wind').img['alt']
-            wind_dir = wind_dict.get(wind_name, 'Ø')
-            wind_speed = hour_row.find_next(class_='value wind wind_ms').get_text()
-            row_str = f'{time:>3}|{temperature:>3}|{temperature_feel:>4}|{precipitation:>4}|{wind_speed:>2}{wind_dir}'
+        # Find the <script> tags and extract JavaScript code
+        scripts = soup.find_all('script')
+        js_code = ''
+        for script in scripts:
+            if script.get_text():
+                js_code += script.get_text()
+        # extract data field with all the values formatted in JSON
+        pattern = re.compile(r'data: (\[\{.*}])', re.DOTALL)
+        hour_data = json.loads(pattern.search(js_code).group(1))
+
+        for hour in hour_data:
+            time = hour["h24"]
+            temperature = hour["temp"]
+            temperature_feel = hour["flike"]
+            precipitation = hour["rain"]
+            wind_dir = wind_dict.get(hour["windCardinal"], 'Ø')
+            wind_speed = hour["winds"]
+            row_str = f'{time:>3}|{temperature:>3}|{temperature_feel:>4}|{round(float(precipitation), 1):>4g}|{wind_speed:>2}{wind_dir}'
             forecast.append(row_str)
-        return ''.join(['```\n', 'час|тмп|ощущ|осад|втр\n', '---+---+----+----+---\n',  # ' 22| +9|  +7| 0.1| 4 =>',
-                        '\n'.join(forecast), '```', ])
+        return ''.join(['```\n',
+                        'час|тмп|ощущ|осад|втр\n',
+                        '---+---+----+----+---\n',
+                        # ' 22| +9|  +7| 0.1| 4 =>',
+                        '\n'.join(forecast),
+                        '```', ])
 
     def hours() -> str:
         return hour_fetcher(THIS_DAY_URL)
@@ -86,6 +98,7 @@ def run():
         return hour_fetcher(NEXT_DAY_URL)
 
     def week() -> str:
+        # since html prefilled with data on server side, extract values from corresponding divs
         request_result = None
         try:
             request_result = get(TEN_DAY_URL)
@@ -101,9 +114,10 @@ def run():
             date = day.find_next(class_='date').get_text()
             # current day's max and min
             temperatures = day.find_all_next(class_='value temp temp_c', limit=2)
-            # remove Celsius sign from temps, input may be '+23°'
+            # remove Celsius sign from temps, strings look like '+23°'
             temp_max, temp_min = temperatures[0].get_text()[:-1], temperatures[1].get_text()[:-1]
-            # strip off units and spaces from precip, input may be '< 0.1 mm' or '2.4 mm'
+            # strip off units and spaces from precip, it can contain additional sign
+            # string looks like '< 0.1 mm' or '2.4 mm'
             precipitation = ''.join(day.find_next(class_='value rain rain_mm').get_text().split()[:-1])
             wind_speed = day.find_next(class_='value wind wind_ms').get_text()
             # get wind direction from 'alt' attribute of wind picture, it's an abbreviation like W, NE
@@ -113,9 +127,11 @@ def run():
             wind_dir = wind_dict.get(wind_name, 'Ø')
             row_str = f'{date:>5}|{temp_max:>4}|{temp_min:>4}|{precipitation:>5}|{wind_speed:>2}{wind_dir}'
             forecast.append(row_str)
-
-        return ''.join(
-            ['```\n', ' дата|макс| мин| осад|втр\n', '-----+----+----+-----+---\n', '\n'.join(forecast), '```', ])
+        return ''.join(['```\n',
+                        ' дата|макс| мин| осад|втр\n',
+                        '-----+----+----+-----+---\n',
+                        '\n'.join(forecast),
+                        '```', ])
 
     def get_help() -> str:
         # '.' is a reserved symbol and must be escaped
@@ -138,6 +154,8 @@ def run():
         log(message)
         bot.send_message(message.chat.id, get_help())
 
+    # keys are used for buttons and filtering input
+    # values are for corresponding action
     func_map = {key.lower(): value for key, value in
                 {
                     'эти сутки': hours,
@@ -154,14 +172,14 @@ def run():
         menu_buttons.append(telebot.types.KeyboardButton(b.capitalize()))
     markup.add(*menu_buttons)
 
-    @bot.message_handler(func=lambda m: m.text.lower() in [str(e).lower() for e in func_map], content_types=['text'], )
+    @bot.message_handler(func=lambda m: m.text.lower() in [str(e) for e in func_map], content_types=['text'], )
     def any_text(message: telebot.types.Message):
         log(message)
         message_ = func_map[message.text.lower()]()
         bot.send_message(message.chat.id, message_, reply_markup=markup, parse_mode='MarkdownV2')
 
     # run bot
-    bot.infinity_polling()
+    bot.infinity_polling(timeout=10, long_polling_timeout=5)
 
 
 if __name__ == '__main__':
