@@ -1,9 +1,11 @@
-import telebot
+import json
 import logging
 import re
-import json
+
+import telebot
 from bs4 import BeautifulSoup
 from requests import get, exceptions
+
 from custom_token import TOKEN
 
 THIS_DAY_URL = 'https://www.foreca.com/ru/100561347/Glazov-Udmurtiya-Republic-Russia/hourly?day=0'
@@ -110,7 +112,7 @@ def run():
 
         soup = BeautifulSoup(request_result.text, 'html.parser')
         forecast = []
-        for day in soup.find_all(class_='day'):
+        for day in soup.find_all(class_='day-container'):
             date = day.find_next(class_='date').get_text()
             # current day's max and min
             temperatures = day.find_all_next(class_='value temp temp_c', limit=2)
