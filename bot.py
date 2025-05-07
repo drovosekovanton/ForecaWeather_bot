@@ -114,24 +114,24 @@ def run():
         forecast = []
         for day in soup.find_all(class_='day-container'):
             date = day.find_next(class_='date').get_text()
-            # current day's max and min
-            temperatures = day.find_all_next(class_='value temp temp_c', limit=2)
+            # current day's max and min, 'value temp temp_c max' and 'value temp temp_c'
+            temperatures = day.find_all_next(class_=re.compile('value temp temp_c'), limit=2)
             # remove Celsius sign from temps, strings look like '+23°'
             temp_max, temp_min = temperatures[0].get_text()[:-1], temperatures[1].get_text()[:-1]
             # strip off units and spaces from precip, it can contain additional sign
             # string looks like '< 0.1 mm' or '2.4 mm'
             precipitation = ''.join(day.find_next(class_='value rain rain_mm').get_text().split()[:-1])
-            wind_speed = day.find_next(class_='value wind wind_ms').get_text()
+            wind_speed = ''.join(day.find_next(class_='value wind wind_ms').get_text().split()[:-1])
             # get wind direction from 'alt' attribute of wind picture, it's an abbreviation like W, NE
             # we use some beautifulsoup4 magic here to find 'alt' attribute from 'img' tag
             # noinspection PyUnresolvedReferences
             wind_name = day.find_next(class_='wind').img['alt']
             wind_dir = wind_dict.get(wind_name, 'Ø')
-            row_str = f'{date:>5}|{temp_max:>4}|{temp_min:>4}|{precipitation:>5}|{wind_speed:>2}{wind_dir}'
+            row_str = f'{date:>6}|{temp_max:>4}|{temp_min:>4}|{precipitation:>5}|{wind_speed:>2}{wind_dir}'
             forecast.append(row_str)
         return ''.join(['```\n',
-                        ' дата|макс| мин| осад|втр\n',
-                        '-----+----+----+-----+---\n',
+                        '  дата|макс| мин| осад|втр\n',
+                        '------+----+----+-----+---\n',
                         '\n'.join(forecast),
                         '```', ])
 
