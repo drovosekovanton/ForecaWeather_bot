@@ -48,7 +48,9 @@ wind_dict = {  # double arrow emojis from Unicode table
 
 def run():
     bot = telebot.TeleBot(TOKEN)
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.INFO,
+                        format='%(asctime)s - %(levelname)s - %(message)s',
+                        datefmt='%Y-%m-%d %H:%M:%S')
 
     def log(message: telebot.types.Message):
         # log request string and username, just in case
@@ -58,7 +60,7 @@ def run():
         # values extracted from data field of some js script
         request_result = None
         try:
-            request_result = get(url)
+            request_result = get(url, timeout=(5, 5))
         except exceptions.ConnectionError:
             pass
         finally:
@@ -103,7 +105,7 @@ def run():
         # since html prefilled with data on server side, extract values from corresponding divs
         request_result = None
         try:
-            request_result = get(TEN_DAY_URL)
+            request_result = get(TEN_DAY_URL, timeout=(5, 5))
         except exceptions.ConnectionError:
             pass
         finally:
@@ -136,8 +138,8 @@ def run():
                         '```', ])
 
     def get_help() -> str:
-        # '.' is a reserved symbol and must be escaped
-        return ('Запрос прогноза погоды для одного очень хорошего города\.\n' +
+        # Character '.' is reserved and must be escaped with the preceding '\'
+        return ('Запрос прогноза погоды для одного очень хорошего города\.\n'
                 'Жми кнопку на клавиатуре бота, тут сложно ошибиться')
 
     @bot.message_handler(commands=['start'])
