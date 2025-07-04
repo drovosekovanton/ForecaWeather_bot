@@ -1,8 +1,11 @@
 Simple parsing bot for Foreca weather. Current day, next day, ten-days forecast. Just one city, for personal use only.
 
-Create python virtual environment with all prerequisites. Put token for your bot to custom_token.py (must be laid alongside bot.py) like this:
+Create python virtual environment with all prerequisites. Put token for your bot and set of admin's ids to config.py (must be laid alongside bot.py) like this:
 
-`TOKEN='your_own_token'`
+```python
+TOKEN = 'your_own_token'
+ADMINS = {777888999}
+```
 
 Edit the next url paths for desired location in bot.py:
 

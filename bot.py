@@ -1,13 +1,15 @@
 import json
 import logging
 import re
-
 import telebot
-from bs4 import BeautifulSoup
-from requests import exceptions
 import cloudscraper
 
-from custom_token import TOKEN
+from bs4 import BeautifulSoup
+from requests import exceptions
+from datetime import datetime, timedelta
+from collections import defaultdict
+
+from config import TOKEN, ADMINS
 
 THIS_DAY_URL = 'https://www.foreca.com/ru/100561347/Glazov-Udmurtiya-Republic-Russia/hourly?day=0'
 NEXT_DAY_URL = 'https://www.foreca.com/ru/100561347/Glazov-Udmurtiya-Republic-Russia/hourly?day=1'
@@ -35,7 +37,7 @@ TEN_DAY_URL = 'https://www.foreca.com/ru/100561347/Glazov-Udmurtiya-Republic-Rus
 #     'NW': '\u2198',  # ↘
 # }
 
-wind_dict = {  # double arrow emojis from Unicode table
+WIND_DICT = {  # double arrow emojis from Unicode table
     'N': '\u21d3',  # ↓
     'NE': '\u21d9',  # ↙
     'E': '\u21d0',  # ←
@@ -46,6 +48,9 @@ wind_dict = {  # double arrow emojis from Unicode table
     'NW': '\u21d8',  # ↘
 }
 
+# Cooldown in seconds
+COOLDOWN = 5
+
 
 def run():
     bot = telebot.TeleBot(TOKEN)
@@ -53,14 +58,17 @@ def run():
                         format='%(asctime)s - %(levelname)s - %(message)s',
                         datefmt='%Y-%m-%d %H:%M:%S')
 
+    last_user_action = defaultdict(lambda: datetime.min)
+
     # warm-up with cloudscraper to get cookies, etc.
-    # using it as persistent session
+    # using it as a persistent session
     scraper = cloudscraper.create_scraper()
     scraper.get("https://www.foreca.com", timeout=10)
+    logging.info("Scraper started")
 
     def log(message: telebot.types.Message):
         # log request string and username, just in case
-        logging.info(f'Request \'{message.text}\' from \'{message.chat.username}\'')
+        logging.info(f'Request \'{message.text}\' from \'{message.chat.username}\' ({message.from_user.id})')
 
     def hour_fetcher(url: str) -> str:
         # values extracted from data field of some js script
@@ -83,14 +91,19 @@ def run():
                 js_code += script.get_text()
         # extract data field with all the values formatted in JSON
         pattern = re.compile(r'data: (\[\{.*}])', re.DOTALL)
-        hour_data = json.loads(pattern.search(js_code).group(1))
+        try:
+            hour_data = json.loads(pattern.search(js_code).group(1))
+        except json.decoder.JSONDecodeError:
+            return 'Ошибка в извлечении данных с сайта'
+        if hour_data is None:
+            return 'С сайта возвращены пустые данные'
 
         for hour in hour_data:
             time = hour["h24"]
             temperature = hour["temp"]
             temperature_feel = hour["flike"]
             precipitation = hour["rain"]
-            wind_dir = wind_dict.get(hour["windCardinal"], 'Ø')
+            wind_dir = WIND_DICT.get(hour["windCardinal"], 'Ø')
             wind_speed = hour["winds"]
             row_str = f'{time:>3}|{temperature:>3}|{temperature_feel:>4}|{round(float(precipitation), 1):>4g}|{wind_speed:>2}{wind_dir}'
             forecast.append(row_str)
@@ -134,7 +147,7 @@ def run():
             # we use some beautifulsoup4 magic here to find 'alt' attribute from 'img' tag
             # noinspection PyUnresolvedReferences
             wind_name = day.find_next(class_='wind').img['alt']
-            wind_dir = wind_dict.get(wind_name, 'Ø')
+            wind_dir = WIND_DICT.get(wind_name, 'Ø')
             row_str = f'{date:>6}|{temp_max:>4}|{temp_min:>4}|{precipitation:>5}|{wind_speed:>2}{wind_dir}'
             forecast.append(row_str)
         return ''.join(['```\n',
@@ -185,6 +198,17 @@ def run():
     @bot.message_handler(func=lambda m: m.text.lower() in [str(e) for e in func_map], content_types=['text'], )
     def any_text(message: telebot.types.Message):
         log(message)
+        user_id = message.from_user.id
+        now = datetime.now()
+
+        # Skip cooldown check for admins
+        if user_id not in ADMINS:
+            if now - last_user_action[user_id] < timedelta(seconds=COOLDOWN):
+                bot.send_message(message.chat.id, f'Подожди немного, не так быстро 🕒 (лимит {COOLDOWN} сек)',
+                                 reply_markup=markup)
+                return
+            last_user_action[user_id] = now
+
         message_ = func_map[message.text.lower()]()
         bot.send_message(message.chat.id, message_, reply_markup=markup, parse_mode='MarkdownV2')
 
