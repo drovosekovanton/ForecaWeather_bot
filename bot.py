@@ -4,7 +4,8 @@ import re
 
 import telebot
 from bs4 import BeautifulSoup
-from requests import get, exceptions
+from requests import exceptions
+import cloudscraper
 
 from custom_token import TOKEN
 
@@ -52,6 +53,11 @@ def run():
                         format='%(asctime)s - %(levelname)s - %(message)s',
                         datefmt='%Y-%m-%d %H:%M:%S')
 
+    # warm-up with cloudscraper to get cookies, etc.
+    # using it as persistent session
+    scraper = cloudscraper.create_scraper()
+    scraper.get("https://www.foreca.com", timeout=10)
+
     def log(message: telebot.types.Message):
         # log request string and username, just in case
         logging.info(f'Request \'{message.text}\' from \'{message.chat.username}\'')
@@ -60,7 +66,7 @@ def run():
         # values extracted from data field of some js script
         request_result = None
         try:
-            request_result = get(url, timeout=(5, 5))
+            request_result = scraper.get(url, timeout=(5, 5))
         except exceptions.ConnectionError:
             pass
         finally:
@@ -105,7 +111,7 @@ def run():
         # since html prefilled with data on server side, extract values from corresponding divs
         request_result = None
         try:
-            request_result = get(TEN_DAY_URL, timeout=(5, 5))
+            request_result = scraper.get(TEN_DAY_URL, timeout=(5, 5))
         except exceptions.ConnectionError:
             pass
         finally:
@@ -139,7 +145,7 @@ def run():
 
     def get_help() -> str:
         # Character '.' is reserved and must be escaped with the preceding '\'
-        return ('Запрос прогноза погоды для одного очень хорошего города\.\n'
+        return ('Запрос прогноза погоды для одного очень хорошего города\\.\n'
                 'Жми кнопку на клавиатуре бота, тут сложно ошибиться')
 
     @bot.message_handler(commands=['start'])
