@@ -5,9 +5,11 @@ import telebot
 import cloudscraper
 
 from bs4 import BeautifulSoup
-from requests import exceptions
+from requests.exceptions import ReadTimeout, ConnectionError
 from datetime import datetime, timedelta
 from collections import defaultdict
+from urllib3.exceptions import ProtocolError
+from time import sleep
 
 from config import TOKEN, ADMINS
 
@@ -75,7 +77,7 @@ def run():
         request_result = None
         try:
             request_result = scraper.get(url, timeout=(5, 5))
-        except exceptions.ConnectionError:
+        except ConnectionError:
             pass
         finally:
             if request_result is None or request_result.status_code != 200:
@@ -125,7 +127,7 @@ def run():
         request_result = None
         try:
             request_result = scraper.get(TEN_DAY_URL, timeout=(5, 5))
-        except exceptions.ConnectionError:
+        except ConnectionError:
             pass
         finally:
             if request_result is None or request_result.status_code != 200:
@@ -213,7 +215,15 @@ def run():
         bot.send_message(message.chat.id, message_, reply_markup=markup, parse_mode='MarkdownV2')
 
     # run bot
-    bot.infinity_polling(timeout=10, long_polling_timeout=5)
+    while True:
+        try:
+            bot.infinity_polling(timeout=20, long_polling_timeout=20)
+        except (ReadTimeout, ConnectionError, ProtocolError) as ex:
+            logging.error(f"Polling exception: {ex}")
+            sleep(5)
+        except Exception as ex:
+            logging.error(f"Unexpected error: {ex}")
+            sleep(5)
 
 
 if __name__ == '__main__':

@@ -2,3 +2,4 @@ beautifulsoup4~=4.13.4
 requests~=2.32.4
 pyTelegramBotAPI~=4.27.0
 cloudscraper~=1.2.71
+urllib3~=2.5.0
