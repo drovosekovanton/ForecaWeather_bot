@@ -3,6 +3,8 @@ import logging
 import re
 import telebot
 import cloudscraper
+import signal
+import sys
 
 from bs4 import BeautifulSoup
 from requests.exceptions import ReadTimeout, ConnectionError
@@ -67,6 +69,15 @@ def run():
     scraper = cloudscraper.create_scraper()
     scraper.get("https://www.foreca.com", timeout=10)
     logging.info("Scraper started")
+
+    # Handle both Ctrl+C and systemd stop gracefully
+    def shutdown(signum, frame):
+        logging.info("Shutdown signal received, stopping bot...")
+        bot.stop_polling()
+        sys.exit(0)
+
+    signal.signal(signal.SIGTERM, shutdown)
+    signal.signal(signal.SIGINT, shutdown)  # this covers Ctrl+C too
 
     def log(message: telebot.types.Message):
         # log request string and username, just in case
@@ -221,6 +232,8 @@ def run():
         except (ReadTimeout, ConnectionError, ProtocolError) as ex:
             logging.error(f"Polling exception: {ex}")
             sleep(5)
+        except SystemExit:
+            break  # clean exit from shutdown()
         except Exception as ex:
             logging.error(f"Unexpected error: {ex}")
             sleep(5)
